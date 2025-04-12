@@ -1,0 +1,1 @@
+﻿target_include_directories(Chess PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
