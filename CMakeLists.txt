@@ -1,21 +1,19 @@
-﻿cmake_minimum_required(VERSION 3.15)
-project(Chess)
-
+﻿cmake_minimum_required(VERSION 3.16)
+project(Chess LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(chess_lib)
+include_directories(${CMAKE_SOURCE_DIR}/include)
 
-add_executable(chess main.cpp)
+file(GLOB TEMPLATE_SRC CONFIGURE_DEPENDS
+        tel-hai-excellenteam-*/Chess/src/*.cpp)
 
-target_link_libraries(chess PRIVATE chess_lib)
+list(FILTER TEMPLATE_SRC EXCLUDE REGEX ".*/main.cpp$")
+list(FILTER PROJECT_SRC EXCLUDE REGEX ".*/MoveRecommender_helpers.cpp$")
 
-add_subdirectory(include)
-add_subdirectory(src)
+file(GLOB PROJECT_SRC CONFIGURE_DEPENDS src/*.cpp)
 
-option(ENABLE_TESTING "Build unit tests" ON)
-if (ENABLE_TESTING)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+add_executable(chess_multithread ${PROJECT_SRC} ${TEMPLATE_SRC})
+
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(chess_multithread PRIVATE Threads::Threads)

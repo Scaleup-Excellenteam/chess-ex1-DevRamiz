@@ -8,21 +8,22 @@ class PriorityQueue {
     Comparator   cmp;
 
 public:
-    /* ---------- new lines ---------- */
     std::size_t size()  const { return data.size(); }
     bool        empty() const { return data.empty(); }
-    /* -------------------------------- */
 
     void push(const T& val)
     {
         auto it = data.begin();
         for (; it != data.end(); ++it)
-            if (cmp(val, *it)) break;     // true ⇒ val is better
+            if (cmp(val, *it)) break;
         data.insert(it, val);
     }
 
-    T poll()
-    {
+    const T& top() const {
+        if (data.empty()) throw EmptyPriorityQueueException();
+        return data.front();
+    }
+    T poll() {
         if (data.empty()) throw EmptyPriorityQueueException();
         T best = data.front();
         data.pop_front();

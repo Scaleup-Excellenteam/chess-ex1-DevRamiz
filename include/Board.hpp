@@ -5,7 +5,7 @@
 #include "Position.hpp"
 
 class Board {
-    std::vector<std::vector<Piece*>> board;
+    std::vector<std::vector<Piece*> > board;
     bool whiteTurn;
     void setupPieces();
     bool isCheck(bool white) const;
@@ -21,4 +21,7 @@ public:
     Piece* execute(const std::string& from, const std::string& to);
     void   undo(const std::string& from, const std::string& to, Piece* captured);
     static bool inBounds(int row, int col);
+    Piece* at(Position p) const                     { return getPiece(p.row, p.col); }
+    bool   turn() const                             { return whiteToMove(); }
+    const std::vector<std::vector<Piece*> >& raw() const { return board; }
 };

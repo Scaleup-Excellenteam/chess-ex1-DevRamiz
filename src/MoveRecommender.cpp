@@ -1,32 +1,45 @@
 #include "MoveRecommender.hpp"
-#include "ChessExceptions.hpp"
-#include <limits>
-#include <iostream>
+#include "Position.hpp"
 #include <algorithm>
-
-// Convert internal Position to board notation using your flipped layout
-static std::string squareToUI(const Position& p) {
-    return { char('a' + p.col), char('A' + p.row) };
-}
+#include <thread>
 
 MoveRecommender::MoveRecommender(Board& b, int depth)
         : board(b), maxDepth(depth) {}
 
 int MoveRecommender::materialValue(char p) const {
-    switch(std::tolower(p)){
+    switch (tolower(p)) {
         case 'p': return 1;
         case 'n': return 3;
         case 'b': return 3;
         case 'r': return 5;
         case 'q': return 9;
-        case 'k': return 1000;
-        default : return 0;
+        case 'k': return 100;
+        default: return 0;
     }
 }
 
-void MoveRecommender::collectMoves(bool white,
-                                   std::vector<std::pair<std::string,std::string>>& out)
-{
+int MoveRecommender::evaluateMove(const std::string& from, const std::string& to, int depth) {
+    Piece* captured = board.execute(from, to);
+    int score = 0;
+
+    score += materialValue(captured ? captured->getChar() : 0);
+    score += centreBonus(Position(to));
+    score += coveredSquaresDiff(!board.whiteToMove());
+
+    if (depth < maxDepth) {
+        std::vector<std::pair<std::string, std::string>> replies;
+        collectMoves(board.whiteToMove(), replies);
+        for (const auto& mv : replies) {
+            int replyScore = evaluateMove(mv.first, mv.second, depth + 1);
+            score -= replyScore;
+        }
+    }
+
+    board.undo(from, to, captured);
+    return score;
+}
+
+void MoveRecommender::collectMoves(bool white, std::vector<std::pair<std::string, std::string>>& moves) {
     for (int r = 0; r < 8; ++r) {
         for (int c = 0; c < 8; ++c) {
             Piece* piece = board.getPiece(r, c);
@@ -34,44 +47,11 @@ void MoveRecommender::collectMoves(bool white,
 
             Position from(r, c);
             auto legalMoves = piece->getLegalMoves(board, from);
-            for (const Position& to : legalMoves) {
-                out.emplace_back(from.toString(), to.toString());
+            for (Position to : legalMoves) {
+                moves.emplace_back(from.toString(), to.toString());
             }
         }
     }
-}
-
-int MoveRecommender::evaluateMove(const std::string& from, const std::string& to, int depth) {
-    Piece* captured = nullptr;
-    try {
-        captured = board.execute(from, to);
-    } catch (...) {
-        return std::numeric_limits<int>::min(); // illegal move
-    }
-
-    int score = 0;
-    if (captured) score += materialValue(captured->getChar()) * 10;
-
-    // Depth-0 heuristic bonus
-    score += centreBonus(Position(to));
-    score += coveredSquaresDiff(!board.whiteToMove());
-
-    // Recursively simulate opponent move
-    if (depth < maxDepth) {
-        std::vector<std::pair<std::string, std::string>> replies;
-        collectMoves(board.whiteToMove(), replies);
-        int worst = std::numeric_limits<int>::min();
-        for (const auto& reply : replies) {
-            try {
-                int replyScore = evaluateMove(reply.first, reply.second, depth + 1);
-                worst = std::max(worst, replyScore);
-            } catch (...) {}
-        }
-        score -= worst;
-    }
-
-    board.undo(from, to, captured);
-    return score;
 }
 
 Move MoveRecommender::recommend() {
@@ -85,46 +65,30 @@ Move MoveRecommender::recommend() {
         if (top5.size() > 5) top5.poll();
     }
 
-    if (top5.empty()) throw ChessException("No legal moves");
-
-    std::vector<Move> top;
-    while (!top5.empty()) top.push_back(top5.poll());
-    return *std::max_element(top.begin(), top.end(), [](const Move& a, const Move& b) {
-        return a.score < b.score;
-    });
+    return top5.empty() ? Move() : top5.top();
 }
 
-int MoveRecommender::coveredSquaresDiff(bool side) const
+std::vector<Move> MoveRecommender::topMoves() {
+    std::vector<Move> out;
+    while (!top5.empty()) out.push_back(top5.poll());
+    return out;
+}
+
+int MoveRecommender::centreBonus(Position p) const
 {
-    int mine = 0, his = 0;
+    if (p.row >= 3 && p.row <= 4 && p.col >= 3 && p.col <= 4) return 20;
+    if (p.row >= 2 && p.row <= 5 && p.col >= 2 && p.col <= 5) return 10;
+    return 0;
+}
+
+int MoveRecommender::coveredSquaresDiff(bool white) const
+{
+    int score = 0;
     for (int r = 0; r < 8; ++r)
         for (int c = 0; c < 8; ++c) {
-            if (r < 0 || r >= 8 || c < 0 || c >= 8)
-                continue;
-
             Piece* pc = board.getPiece(r, c);
-            if (!pc)
-                continue;
-
-            if (pc->getColor() == side)
-                mine += materialValue(pc->getChar());
-            else
-                his += materialValue(pc->getChar());
+            if (!pc || pc->getColor() != white) continue;
+            score += static_cast<int>(pc->getLegalMoves(board, {r,c}).size());
         }
-    return (mine - his) / 2;
-}
-
-void MoveRecommender::printTop3() const {
-    if (top5.empty()) {
-        std::cout << " >> No legal moves\n";
-        return;
-    }
-    auto tmp = top5;
-    std::cout << " >> Recommended moves:\n";
-    for (int i = 0; i < 3 && !tmp.empty(); ++i) {
-        Move m = tmp.poll();
-        std::cout << "    " << squareToUI(m.from) << " → " << squareToUI(m.to)
-                  << "  (score " << m.score << ")\n";
-    }
-    std::cout << '\n';
+    return score;
 }
