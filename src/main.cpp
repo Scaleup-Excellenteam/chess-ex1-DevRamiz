@@ -1,77 +1,43 @@
-#include <iostream>
-#include <string>
-// Chess
 #include "Chess.h"
-#include "Board.hpp"
 #include "MoveRecommender.hpp"
-#include "Move.hpp"
-#include "ChessExceptions.hpp"
-#include "PriorityQueue.hpp"
+#include "Benchmarker.hpp"
+#include <iomanip>
+#include <iostream>
 
+using std::string; using std::cout; using std::cin; using std::endl;
 
-int main() {
-    string board = "RNBQKBNRPPPPPPPP################################pppppppprnbqkbnr";
-//	string board = "##########K###############################R#############r#r#####";
-    Chess a(board);
-    int codeResponse = 0;
-    string res = a.getInput();
-    while (res != "exit") {
-        /*
-        codeResponse value :
-        Illegal movements :
-        11 - there is not piece at the source
-        12 - the piece in the source is piece of your opponent
-        13 - there one of your pieces at the destination
-        21 - illegal movement of that piece
-        31 - this movement will cause you checkmate
-        legal movements :
-        41 - the last movement was legal and cause check
-        42 - the last movement was legal, next turn
-        */
+static string toStr(Position p){return string(1,'A'+p.col)+std::to_string(p.row+1);}
 
+int main(){
+    string init="RNBQKBNRPPPPPPPP################################pppppppprnbqkbnr";
+    Chess a(init);                // template handles IO
+    Board aiBoard;                // our board for AI/bench
+    int code=0; string res=a.getInput();
 
-        {   // only this block is allowed to change
-            static Board gameBoard;                 // default ctor builds start-position
-
-            try {
-                if (res.size() == 4) {              // human move “e2e4”
-                    std::string from = res.substr(0, 2);
-                    std::string to   = res.substr(2, 2);
-
-                    codeResponse = gameBoard.move(from, to);
-                    a.setCodeResponse(codeResponse);
-                }
-                else if (res == "ai" || res == "AI") {          // let the engine move
-                    MoveRecommender engine(gameBoard, 2);       // depth-2 search
-                    Move best = engine.recommend();
-
-                    std::string from, to;
-                    from += char('a' + best.from.col);
-                    from += char('1' + best.from.row);
-                    to   += char('a' + best.to.col);
-                    to   += char('1' + best.to.row);
-
-                    std::cout << "Engine plays " << from << to << '\n';
-
-                    codeResponse = gameBoard.move(from, to);    // use the same validated path
-                    a.setCodeResponse(codeResponse);
-                }
-                else {
-                    std::cout << "Invalid input !!\n";
-                    a.setCodeResponse(21);                    // illegal movement
-                }
+    while(res!="exit"){
+        /**/ { // allowed snippet
+            static bool once=false;
+            if(!once){
+                Benchmarker bm(aiBoard,8);
+                auto rows=bm.run({0,2,4,8});
+                cout<<"\nBenchmark (8 plies)\nthreads | time [ms]\n";
+                for(auto& r:rows)
+                    cout<<std::setw(7)<<r.threads<<" | "
+                        <<std::setw(9)<<std::fixed<<std::setprecision(1)<<r.ms<<endl;
+                cout<<endl; once=true;
             }
-            catch (const InvalidMoveException&)        { a.setCodeResponse(21); }
-            catch (const EmptyPriorityQueueException&) { a.setCodeResponse(31); }
-            catch (const PawnPromotionException&)      { a.setCodeResponse(11); }
-            catch (const ChessException&)              { a.setCodeResponse(31); }
-
-            res = a.getInput();
-        }
-
+            MoveRecommender rec(aiBoard);
+            auto best=rec.topMoves();
+            if(!best.empty()){
+                cout<<"AI suggests: "<<toStr(best[0].from)<<" -> "<<toStr(best[0].to)
+                    <<"  (score "<<best[0].score<<")\n";
+                aiBoard.move(toStr(best[0].from),toStr(best[0].to)); // mirror
+            }
+            cout<<"code response >> "; cin>>code;
+        } /**/
+        a.setCodeResponse(code);
+        res=a.getInput();
     }
-
-
-    cout << endl << "Exiting " << endl;
+    cout<<"\nExiting\n";
     return 0;
 }

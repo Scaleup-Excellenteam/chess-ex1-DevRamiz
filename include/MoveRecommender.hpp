@@ -1,28 +1,32 @@
 #pragma once
-#include <vector>
-#include "PriorityQueue.hpp"
 #include "Board.hpp"
 #include "Move.hpp"
+#include "PriorityQueue.hpp"
+#include <vector>
+#include <string>
+
+struct BetterMove {
+    bool operator()(const Move& a, const Move& b) const {
+        return a.score > b.score;
+    }
+};
 
 class MoveRecommender {
-    Board&                            board;
-    int                               maxDepth;    // 1–3
-    PriorityQueue<Move,MoveComparator> top5;
+    Board& board;
+    int maxDepth;
+    PriorityQueue<Move, BetterMove> top5;
 
-    int  evaluateMove(const std::string& from,const std::string& to,int depth);
-    int  materialValue(char piece) const;
+    int materialValue(char p) const;
+    int centreBonus(Position p) const;
+    bool leavesPieceHanging(const std::string& from, const std::string& to) const;
+    bool threatensStronger(const std::string& from, const std::string& to) const;
 
-    // heuristics helpers
-    int  centreBonus(Position p) const;
-    int  coveredSquaresDiff(bool side) const;
-    bool leavesPieceHanging (const std::string& from,const std::string& to,bool side);
-    bool threatensStronger  (const std::string& from,const std::string& to,bool side);
+    void collectMoves(bool whiteTurn, std::vector<std::pair<std::string, std::string>>& moves);
+    int evaluateMove(const std::string& from, const std::string& to, int depth);
+    int coveredSquaresDiff(bool white) const;
 
-    void collectMoves(bool white,
-                      std::vector<std::pair<std::string,std::string>>& out);
 public:
-    explicit MoveRecommender(Board& b,int depth=2);
-
-    Move recommend();        // single best move
-    void printTop3() const;  // show 3 best from current top5
+    MoveRecommender(Board& b, int depth = 3);
+    Move recommend();
+    std::vector<Move> topMoves();
 };
